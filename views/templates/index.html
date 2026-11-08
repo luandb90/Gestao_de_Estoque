@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Estoque</title>
+    <style>
+        :root {
+            --bg: #f4f1ea;
+            --card: #ffffff;
+            --primary: #1f3d2b;
+            --primary-hover: #152b1e;
+            --text: #222623;
+            --danger: #b42318;
+            --warn-bg: #fef0c7;
+            --warn-text: #93370d;
+            --border: #dcd7cc;
+        }
+        * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+        body { margin: 0; background: var(--bg); color: var(--text); padding: 24px 16px; }
+        .container { max-width: 1020px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+        h1 { margin: 0; color: var(--primary); font-size: 1.6rem; }
+        .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .kpi { background: var(--card); border: 1px solid var(--border); padding: 14px 18px; border-radius: 8px; }
+        .kpi span { font-size: 0.85rem; opacity: 0.8; display: block; }
+        .kpi strong { font-size: 1.35rem; color: var(--primary); }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 20px; }
+        .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: end; }
+        label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
+        input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; }
+        button, .btn-link { padding: 10px 14px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.9rem; text-decoration: none; display: inline-block; text-align: center; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-outline { background: #e8e4da; color: var(--text); }
+        .btn-danger { background: #fee4e2; color: var(--danger); padding: 6px 10px; font-size: 0.82rem; }
+        .btn-edit { background: #e8e4da; color: var(--text); padding: 6px 10px; font-size: 0.82rem; margin-right: 4px; }
+        .alerta { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-weight: 500; }
+        .alerta.sucesso { background: #d1fadf; color: #05603a; }
+        .alerta.erro { background: #fee4e2; color: var(--danger); }
+        .barra-busca { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .barra-busca input { flex: 1; min-width: 200px; }
+        .tabela-responsiva { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 620px; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 0.92rem; }
+        th { background: #ece8de; color: var(--primary); }
+        .badge-baixo { background: var(--warn-bg); color: var(--warn-text); padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Gestão de Estoque</h1>
+    </header>
+
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+        {% for categoria, msg in mensagens %}
+            <div class="alerta {{ categoria }}">{{ msg }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    <div class="kpis">
+        <div class="kpi">
+            <span>Itens listados</span>
+            <strong>{{ produtos|length }}</strong>
+        </div>
+        <div class="kpi">
+            <span>Valor total em estoque</span>
+            <strong>R$ {{ "%.2f"|format(valor_total)|replace(".", ",") }}</strong>
+        </div>
+        <div class="kpi">
+            <span>Alertas de estoque baixo (&lt; 5 un.)</span>
+            <strong>{{ estoque_baixo }}</strong>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top:0">{{ "Editar Produto" if produto_edicao else "Novo Produto" }}</h3>
+        <form action="{{ url_for('produto.salvar') }}" method="POST" class="grid-form">
+            <input type="hidden" name="id" value="{{ produto_edicao.id if produto_edicao else '' }}">
+            <div>
+                <label>Código SKU</label>
+                <input type="text" name="sku" placeholder="Ex: PER-001" required value="{{ produto_edicao.sku if produto_edicao else '' }}">
+            </div>
+            <div>
+                <label>Nome do Produto</label>
+                <input type="text" name="nome" placeholder="Ex: Boné Aba Curva" required value="{{ produto_edicao.nome if produto_edicao else '' }}">
+            </div>
+            <div>
+                <label>Categoria</label>
+                <input type="text" name="categoria" placeholder="Ex: Acessórios" required value="{{ produto_edicao.categoria if produto_edicao else '' }}">
+            </div>
+            <div>
+                <label>Preço (R$)</label>
+                <input type="text" name="preco" placeholder="Ex: 59,90" required value="{{ ('%.2f'|format(produto_edicao.preco)|replace('.', ',')) if produto_edicao else '' }}">
+            </div>
+            <div>
+                <label>Quantidade</label>
+                <input type="number" name="quantidade" min="0" placeholder="0" required value="{{ produto_edicao.quantidade if produto_edicao is not none else '' }}">
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button type="submit" class="btn-primary">{{ "Atualizar" if produto_edicao else "Cadastrar" }}</button>
+                {% if produto_edicao %}
+                    <a href="{{ url_for('produto.index') }}" class="btn-link btn-outline">Cancelar</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <form method="GET" action="{{ url_for('produto.index') }}" class="barra-busca">
+            <input type="text" name="q" placeholder="Buscar por nome (mesmo sem acento), SKU ou categoria..." value="{{ busca }}">
+            <button type="submit" class="btn-primary">Buscar</button>
+            {% if busca %}
+                <a href="{{ url_for('produto.index') }}" class="btn-link btn-outline">Limpar</a>
+            {% endif %}
+        </form>
+
+        <div class="tabela-responsiva">
+            <table>
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Produto</th>
+                        <th>Categoria</th>
+                        <th>Preço</th>
+                        <th>Qtd.</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in produtos %}
+                    <tr>
+                        <td><strong>{{ p.sku }}</strong></td>
+                        <td>{{ p.nome }}</td>
+                        <td>{{ p.categoria }}</td>
+                        <td>R$ {{ "%.2f"|format(p.preco)|replace(".", ",") }}</td>
+                        <td>
+                            {{ p.quantidade }}
+                            {% if p.quantidade < 5 %}
+                                <span class="badge-baixo">Estoque baixo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('produto.index', editar_id=p.id) }}" class="btn-link btn-edit">Editar</a>
+                            <form action="{{ url_for('produto.excluir', produto_id=p.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir o item {{ p.nome }}?');">
+                                <button type="submit" class="btn-danger">Excluir</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align:center; padding: 20px;">Nenhum produto encontrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>
